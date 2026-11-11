@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BiciLog - Entrenamiento de Bici Estática</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            400: '#fb923c',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                        },
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Mobile-friendly UI adjustments */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        input, select, textarea {
+            user-select: auto;
+        }
+        /* Hide scrollbars for slick mobile look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col pb-20">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-cardbg/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center space-x-2">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-brand-600/30">
+                <i class="fa-solid font-bold fa-person-biking text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight tracking-wide">BiciLog</h1>
+                <p class="text-xs text-slate-400">Control de Entrenamiento</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-2">
+            <!-- Backup / Restore Modal Trigger -->
+            <button onclick="toggleModal('backupModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition" title="Copias de Seguridad">
+                <i class="fa-solid fa-database"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-lg w-full mx-auto p-4 space-y-6">
+
+        <!-- TAB 1: FORMULARIO NUEVA SESIÓN -->
+        <section id="tab-new" class="tab-content block space-y-5">
+            <div class="bg-cardbg rounded-2xl p-5 border border-slate-800 shadow-xl space-y-4">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <h2 class="text-base font-semibold flex items-center gap-2 text-brand-400">
+                        <i class="fa-solid fa-plus-circle"></i> Nuevo Entrenamiento
+                    </h2>
+                    <span class="text-xs text-slate-400">Bici Estática</span>
+                </div>
+
+                <form id="sessionForm" onsubmit="saveSession(event)" class="space-y-4">
+                    <!-- Fecha y Hora -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Fecha y Hora</label>
+                        <input type="datetime-local" id="dateInput" required 
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                    </div>
+
+                    <!-- Tiempo y Distancia -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Tiempo (minutos)</label>
+                            <input type="number" id="timeInput" min="1" step="0.5" placeholder="ej. 45" required oninput="calculateSpeed()"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Distancia (km)</label>
+                            <input type="number" id="distanceInput" min="0.1" step="0.01" placeholder="ej. 18.5" required oninput="calculateSpeed()"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- Velocidad Calculada Automática -->
+                    <div class="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex justify-between items-center">
+                        <span class="text-xs text-slate-400">Velocidad Media Calculada:</span>
+                        <span id="speedDisplay" class="text-lg font-bold text-brand-400">0.00 <span class="text-xs text-slate-400 font-normal">km/h</span></span>
+                    </div>
+
+                    <!-- Calorías y EPOC -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Calorías (KCal)</label>
+                            <input type="number" id="caloriesInput" min="0" placeholder="ej. 450"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">EPOC</label>
+                            <input type="number" id="epocInput" min="0" step="0.1" placeholder="ej. 42.5"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- Pulsaciones Medias y Máximas -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Pulsaciones Med. (ppm)</label>
+                            <input type="number" id="avgHrInput" min="40" max="230" placeholder="ej. 142"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Pulsaciones Máx. (ppm)</label>
+                            <input type="number" id="maxHrInput" min="40" max="230" placeholder="ej. 168"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- Efecto Entrenam. y Vitalidad -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Efecto Entreno (TE 1.0-5.0)</label>
+                            <input type="number" id="teInput" min="1.0" max="5.0" step="0.1" placeholder="ej. 3.2"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Vitalidad</label>
+                            <input type="text" id="vitalityInput" placeholder="ej. Buena / 85%"
+                                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                        </div>
+                    </div>
+
+                    <!-- Recuperación -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Recuperación (ej. 24h / Completa)</label>
+                        <input type="text" id="recoveryInput" placeholder="ej. 18 horas"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                    </div>
+
+                    <!-- Botón Guardar -->
+                    <button type="submit" 
+                        class="w-full py-3.5 px-4 bg-gradient-to-r from-brand-500 to-amber-500 hover:from-brand-600 hover:to-amber-600 font-bold text-white rounded-xl shadow-lg shadow-brand-500/25 transition flex items-center justify-center gap-2 active:scale-95">
+                        <i class="fa-solid fa-floppy-disk"></i> Guardar Entrenamiento
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- TAB 2: GRÁFICOS Y TENDENCIAS -->
+        <section id="tab-charts" class="tab-content hidden space-y-5">
+            <div class="bg-cardbg rounded-2xl p-4 border border-slate-800 shadow-xl space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h2 class="text-base font-semibold text-brand-400 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line"></i> Tendencias y Evolución
+                    </h2>
+                </div>
+
+                <!-- Selectores de Métricas -->
+                <div class="space-y-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Métrica Principal (Eje Izquierdo)</label>
+                        <select id="metric1Select" onchange="updateChart()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none">
+                            <option value="distance">Distancia (km)</option>
+                            <option value="speed">Velocidad Media (km/h)</option>
+                            <option value="time">Tiempo (min)</option>
+                            <option value="calories">Calorías (kcal)</option>
+                            <option value="avgHr" selected>Pulsaciones Medias (ppm)</option>
+                            <option value="maxHr">Pulsaciones Máximas (ppm)</option>
+                            <option value="epoc">EPOC</option>
+                            <option value="te">Efecto Entrenamiento (TE)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Métrica Secundaria / Comparativa (Eje Derecho)</label>
+                        <select id="metric2Select" onchange="updateChart()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none">
+                            <option value="none">-- Ninguna (Métrica única) --</option>
+                            <option value="distance" selected>Distancia (km)</option>
+                            <option value="speed">Velocidad Media (km/h)</option>
+                            <option value="time">Tiempo (min)</option>
+                            <option value="calories">Calorías (kcal)</option>
+                            <option value="avgHr">Pulsaciones Medias (ppm)</option>
+                            <option value="maxHr">Pulsaciones Máximas (ppm)</option>
+                            <option value="epoc">EPOC</option>
+                            <option value="te">Efecto Entrenamiento (TE)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Canvas de Gráfica -->
+                <div class="relative w-full h-72 pt-2">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: HISTORIAL DE ENTRENAMIENTOS -->
+        <section id="tab-history" class="tab-content hidden space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-base font-semibold text-brand-400 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Historial de Sesiones
+                </h2>
+                <span id="sessionCount" class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700">0 registros</span>
+            </div>
+
+            <!-- Listado de Tarjetas de Entrenamientos -->
+            <div id="historyList" class="space-y-3">
+                <!-- Se llena dinámicamente con JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 bg-cardbg/95 backdrop-blur border-t border-slate-800 px-6 py-2 flex justify-around items-center">
+        <button onclick="switchTab('tab-new')" id="nav-tab-new" class="nav-btn active flex flex-col items-center gap-1 text-brand-500">
+            <i class="fa-solid fa-circle-plus text-xl"></i>
+            <span class="text-[10px] font-medium">Registrar</span>
+        </button>
+        <button onclick="switchTab('tab-charts')" id="nav-tab-charts" class="nav-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+            <i class="fa-solid fa-chart-line text-xl"></i>
+            <span class="text-[10px] font-medium">Gráficos</span>
+        </button>
+        <button onclick="switchTab('tab-history')" id="nav-tab-history" class="nav-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+            <i class="fa-solid fa-list-ul text-xl"></i>
+            <span class="text-[10px] font-medium">Historial</span>
+        </button>
+    </nav>
+
+    <!-- MODAL DE DETALLES -->
+    <div id="detailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-cardbg border border-slate-800 rounded-2xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-lg text-brand-400">Detalle de Sesión</h3>
+                <button onclick="toggleModal('detailModal')" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div id="detailContent" class="space-y-3 text-sm">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="pt-2">
+                <button onclick="toggleModal('detailModal')" class="w-full py-2.5 bg-slate-800 text-slate-300 font-semibold rounded-xl hover:bg-slate-700">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE COPIAS DE SEGURIDAD -->
+    <div id="backupModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-cardbg border border-slate-800 rounded-2xl w-full max-w-md p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-lg text-brand-400 flex items-center gap-2">
+                    <i class="fa-solid fa-database"></i> Copia de Seguridad
+                </h3>
+                <button onclick="toggleModal('backupModal')" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <p class="text-xs text-slate-400">Guarda una copia de tus registros en tu móvil o restaura tus datos cuando lo necesites.</p>
+
+            <div class="space-y-3">
+                <button onclick="exportJSON()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-download text-brand-400"></i> Exportar Datos (JSON)
+                </button>
+                <button onclick="exportCSV()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-file-csv text-emerald-400"></i> Exportar Datos (CSV / Excel)
+                </button>
+                
+                <div class="pt-2 border-t border-slate-800">
+                    <label class="block text-xs text-slate-400 mb-1">Importar Copia de Seguridad (.json)</label>
+                    <input type="file" id="importFileInput" accept=".json" onchange="importJSON(event)" 
+                        class="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-600 file:text-white hover:file:bg-brand-500 cursor-pointer">
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <button onclick="toggleModal('backupModal')" class="w-full py-2.5 bg-slate-800 text-slate-300 font-semibold rounded-xl hover:bg-slate-700 text-xs">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Key for local storage
+        const STORAGE_KEY = 'bicilog_sessions_v1';
+        let sessions = [];
+        let chartInstance = null;
+
+        // Metric configurations
+        const metricLabels = {
+            distance: { title: 'Distancia', unit: 'km', color: '#f97316' },
+            speed: { title: 'Velocidad Media', unit: 'km/h', color: '#3b82f6' },
+            time: { title: 'Tiempo', unit: 'min', color: '#8b5cf6' },
+            calories: { title: 'Calorías', unit: 'kcal', color: '#ef4444' },
+            avgHr: { title: 'Pulsaciones Medias', unit: 'ppm', color: '#ec4899' },
+            maxHr: { title: 'Pulsaciones Máximas', unit: 'ppm', color: '#f43f5e' },
+            epoc: { title: 'EPOC', unit: '', color: '#10b981' },
+            te: { title: 'Efecto Entrenamiento', unit: 'TE', color: '#eab308' }
+        };
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', () => {
+            setDefaultDateTime();
+            loadSessions();
+            initChart();
+        });
+
+        // Set current datetime in local timezone
+        function setDefaultDateTime() {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('dateInput').value = now.toISOString().slice(0, 16);
+        }
+
+        // Calculate Speed Real-Time
+        function calculateSpeed() {
+            const time = parseFloat(document.getElementById('timeInput').value);
+            const distance = parseFloat(document.getElementById('distanceInput').value);
+            const speedDisplay = document.getElementById('speedDisplay');
+
+            if (time > 0 && distance > 0) {
+                const speed = (distance / (time / 60)).toFixed(2);
+                speedDisplay.innerHTML = `${speed} <span class="text-xs text-slate-400 font-normal">km/h</span>`;
+            } else {
+                speedDisplay.innerHTML = `0.00 <span class="text-xs text-slate-400 font-normal">km/h</span>`;
+            }
+        }
+
+        // Save session
+        function saveSession(e) {
+            e.preventDefault();
+
+            const time = parseFloat(document.getElementById('timeInput').value);
+            const distance = parseFloat(document.getElementById('distanceInput').value);
+            const speed = parseFloat((distance / (time / 60)).toFixed(2));
+
+            const newSession = {
+                id: Date.now(),
+                date: document.getElementById('dateInput').value,
+                time: time,
+                distance: distance,
+                speed: speed,
+                calories: parseFloat(document.getElementById('caloriesInput').value) || 0,
+                epoc: parseFloat(document.getElementById('epocInput').value) || 0,
+                avgHr: parseInt(document.getElementById('avgHrInput').value) || 0,
+                maxHr: parseInt(document.getElementById('maxHrInput').value) || 0,
+                te: parseFloat(document.getElementById('teInput').value) || 0,
+                vitality: document.getElementById('vitalityInput').value.trim() || '-',
+                recovery: document.getElementById('recoveryInput').value.trim() || '-'
+            };
+
+            sessions.unshift(newSession);
+            saveToLocalStorage();
+            renderHistory();
+            updateChart();
+
+            // Reset form
+            document.getElementById('sessionForm').reset();
+            setDefaultDateTime();
+            calculateSpeed();
+
+            // Switch to History tab
+            switchTab('tab-history');
+        }
+
+        // Local Storage Management
+        function saveToLocalStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        }
+
+        function loadSessions() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    sessions = JSON.parse(stored);
+                } catch (e) {
+                    sessions = [];
+                }
+            } else {
+                // Populate demo sample data if empty for instant visualization preview
+                sessions = getSampleData();
+                saveToLocalStorage();
+            }
+            renderHistory();
+        }
+
+        // Render Session History Cards
+        function renderHistory() {
+            const historyList = document.getElementById('historyList');
+            document.getElementById('sessionCount').innerText = `${sessions.length} registro${sessions.length !== 1 ? 's' : ''}`;
+
+            if (sessions.length === 0) {
+                historyList.innerHTML = `
+                    <div class="text-center py-10 bg-cardbg rounded-2xl border border-slate-800 text-slate-400">
+                        <i class="fa-solid fa-bicycle text-4xl mb-2 text-slate-600"></i>
+                        <p class="text-sm">Aún no hay entrenamientos guardados.</p>
+                    </div>`;
+                return;
+            }
+
+            historyList.innerHTML = sessions.map(session => {
+                const dateFormatted = new Date(session.date).toLocaleString('es-ES', {
+                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                return `
+                    <div class="bg-cardbg rounded-xl p-4 border border-slate-800 shadow-md space-y-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-xs text-brand-400 font-semibold">${dateFormatted}</span>
+                                <div class="text-lg font-bold text-slate-100 flex items-center gap-2 mt-0.5">
+                                    <span>${session.distance} km</span>
+                                    <span class="text-slate-500 text-xs">•</span>
+                                    <span class="text-slate-300 text-sm font-normal">${session.time} min</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button onclick="viewDetails(${session.id})" class="p-2 text-slate-400 hover:text-brand-400 transition">
+                                    <i class="fa-solid fa-circle-info text-lg"></i>
+                                </button>
+                                <button onclick="deleteSession(${session.id})" class="p-2 text-slate-400 hover:text-red-400 transition">
+                                    <i class="fa-solid fa-trash-can text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-center text-xs">
+                            <div class="bg-slate-900/60 p-2 rounded-lg">
+                                <span class="text-slate-400 block text-[10px]">Vel. Media</span>
+                                <span class="font-bold text-slate-200">${session.speed} <span class="text-[9px] font-normal">km/h</span></span>
+                            </div>
+                            <div class="bg-slate-900/60 p-2 rounded-lg">
+                                <span class="text-slate-400 block text-[10px]">Pulsaciones</span>
+                                <span class="font-bold text-slate-200">${session.avgHr || '-'} <span class="text-[9px] font-normal">ppm</span></span>
+                            </div>
+                            <div class="bg-slate-900/60 p-2 rounded-lg">
+                                <span class="text-slate-400 block text-[10px]">Calorías</span>
+                                <span class="font-bold text-slate-200">${session.calories || '-'} <span class="text-[9px] font-normal">kcal</span></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // View Session Details
+        function viewDetails(id) {
+            const session = sessions.find(s => s.id === id);
+            if (!session) return;
+
+            const dateFormatted = new Date(session.date).toLocaleString('es-ES', {
+                dateStyle: 'full', timeStyle: 'short'
+            });
+
+            document.getElementById('detailContent').innerHTML = `
+                <div class="text-xs text-brand-400 font-semibold mb-2">${dateFormatted}</div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Tiempo:</span> <span class="font-bold text-sm">${session.time} min</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Distancia:</span> <span class="font-bold text-sm">${session.distance} km</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Vel. Media:</span> <span class="font-bold text-sm">${session.speed} km/h</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Calorías:</span> <span class="font-bold text-sm">${session.calories} kcal</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Puls. Medias:</span> <span class="font-bold text-sm">${session.avgHr} ppm</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Puls. Máximas:</span> <span class="font-bold text-sm">${session.maxHr} ppm</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">EPOC:</span> <span class="font-bold text-sm">${session.epoc}</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Efecto Entreno:</span> <span class="font-bold text-sm">${session.te}</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Vitalidad:</span> <span class="font-bold text-sm">${session.vitality}</span></div>
+                    <div class="bg-slate-900 p-2.5 rounded-lg"><span class="text-slate-400 block">Recuperación:</span> <span class="font-bold text-sm">${session.recovery}</span></div>
+                </div>
+            `;
+            toggleModal('detailModal');
+        }
+
+        // Delete Session
+        function deleteSession(id) {
+            sessions = sessions.filter(s => s.id !== id);
+            saveToLocalStorage();
+            renderHistory();
+            updateChart();
+        }
+
+        // Chart Initialization and Update
+        function initChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+                        tooltip: { backgroundColor: '#0f172a', titleColor: '#fb923c', bodyColor: '#f8fafc' }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e293b' } },
+                        y: { position: 'left', ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        y1: { position: 'right', display: false, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+            updateChart();
+        }
+
+        function updateChart() {
+            if (!chartInstance) return;
+
+            // Sort chronologically for charts
+            const sortedSessions = [...sessions].reverse();
+            const labels = sortedSessions.map(s => {
+                const d = new Date(s.date);
+                return `${d.getDate()}/${d.getMonth()+1}`;
+            });
+
+            const key1 = document.getElementById('metric1Select').value;
+            const key2 = document.getElementById('metric2Select').value;
+
+            const datasets = [];
+
+            if (key1 && metricLabels[key1]) {
+                datasets.push({
+                    label: `${metricLabels[key1].title} (${metricLabels[key1].unit})`,
+                    data: sortedSessions.map(s => s[key1] || 0),
+                    borderColor: metricLabels[key1].color,
+                    backgroundColor: metricLabels[key1].color + '20',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    yAxisID: 'y'
+                });
+            }
+
+            if (key2 && key2 !== 'none' && metricLabels[key2]) {
+                datasets.push({
+                    label: `${metricLabels[key2].title} (${metricLabels[key2].unit})`,
+                    data: sortedSessions.map(s => s[key2] || 0),
+                    borderColor: metricLabels[key2].color,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    fill: false,
+                    yAxisID: 'y1'
+                });
+                chartInstance.options.scales.y1.display = true;
+                chartInstance.options.scales.y1.ticks = { color: metricLabels[key2].color };
+            } else {
+                chartInstance.options.scales.y1.display = false;
+            }
+
+            chartInstance.data.labels = labels;
+            chartInstance.data.datasets = datasets;
+            chartInstance.update();
+        }
+
+        // Navigation Tabs Control
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-brand-500');
+                btn.classList.add('text-slate-400');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const navBtn = document.getElementById(`nav-${tabId}`);
+            if (navBtn) {
+                navBtn.classList.remove('text-slate-400');
+                navBtn.classList.add('text-brand-500');
+            }
+
+            if (tabId === 'tab-charts') {
+                setTimeout(() => updateChart(), 100);
+            }
+        }
+
+        // Modals Toggle
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.toggle('hidden');
+        }
+
+        // Export JSON Backup
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessions, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `bicilog_backup_${new Date().toISOString().slice(0,10)}.json`);
+            dlAnchorElem.click();
+        }
+
+        // Export CSV Backup
+        function exportCSV() {
+            if (sessions.length === 0) return;
+            const headers = ["Fecha", "Tiempo (min)", "Distancia (km)", "Velocidad Media (km/h)", "Calorias (kcal)", "EPOC", "Pulsaciones Medias", "Pulsaciones Maximas", "Efecto Entreno", "Vitalidad", "Recuperacion"];
+            const rows = sessions.map(s => [
+                s.date, s.time, s.distance, s.speed, s.calories, s.epoc, s.avgHr, s.maxHr, s.te, `"${s.vitality}"`, `"${s.recovery}"`
+            ]);
+            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", csvContent);
+            dlAnchorElem.setAttribute("download", `bicilog_datos_${new Date().toISOString().slice(0,10)}.csv`);
+            dlAnchorElem.click();
+        }
+
+        // Import JSON Backup
+        function importJSON(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(e) {
+                try {
+                    const importedSessions = JSON.parse(e.target.result);
+                    if (Array.isArray(importedSessions)) {
+                        sessions = importedSessions;
+                        saveToLocalStorage();
+                        renderHistory();
+                        updateChart();
+                        toggleModal('backupModal');
+                    }
+                } catch (err) {
+                    // Handled gracefully
+                }
+            };
+            if (event.target.files[0]) {
+                fileReader.readAsText(event.target.files[0]);
+            }
+        }
+
+        // Pre-loaded sample data for initial testing
+        function getSampleData() {
+            return [
+                { id: 101, date: "2026-11-09T18:30", time: 45, distance: 18.2, speed: 24.27, calories: 420, epoc: 38.5, avgHr: 141, maxHr: 165, te: 3.2, vitality: "Excelente", recovery: "18 hrs" },
+                { id: 102, date: "2026-11-07T19:00", time: 40, distance: 15.5, speed: 23.25, calories: 360, epoc: 32.0, avgHr: 138, maxHr: 159, te: 2.9, vitality: "Buena", recovery: "12 hrs" },
+                { id: 103, date: "2026-11-05T18:15", time: 50, distance: 21.0, speed: 25.20, calories: 510, epoc: 46.2, avgHr: 146, maxHr: 172, te: 3.6, vitality: "Normal", recovery: "24 hrs" }
+            ];
+        }
+    </script>
+</body>
+</html>
